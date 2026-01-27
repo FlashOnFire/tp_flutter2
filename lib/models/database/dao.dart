@@ -29,7 +29,7 @@ class Dao {
     print('Creating database tables...');
     await db.execute('''
  CREATE TABLE auteur (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
+ id INTEGER PRIMARY KEY,
  nom VARCHAR(255) NOT NULL,
  prenoms VARCHAR(255) NOT NULL,
  email VARCHAR(255),
@@ -38,14 +38,14 @@ class Dao {
  ''');
     await db.execute('''
  CREATE TABLE categorie (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
+ id INTEGER PRIMARY KEY,
  libelle VARCHAR(255) NOT NULL,
  created_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
     await db.execute('''
  CREATE TABLE livre (
- id INTEGER PRIMARY KEY AUTOINCREMENT,
+ id INTEGER PRIMARY KEY,
  libelle VARCHAR(255) NOT NULL,
  description TEXT,
  auteur_id INTEGER NOT NULL,
@@ -53,12 +53,18 @@ class Dao {
  created_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
-    await db.execute('''
- CREATE TABLE sync_metadata (
- key TEXT PRIMARY KEY,
- value TEXT NOT NULL
- )
- ''');
+  }
+
+  static Future<int> _getNextLocalId(String tableName) async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT MIN(id) as min_id FROM $tableName');
+
+    if (result.isEmpty || result.first['min_id'] == null) {
+      return -1;
+    }
+
+    final minId = result.first['min_id'] as int;
+    return minId >= 0 ? -1 : minId - 1;
   }
 
   static Future<List<Categorie>> listeCategorie() async {
@@ -86,9 +92,10 @@ class Dao {
 
   static Future<Categorie> createCategorie(Categorie categorie) async {
     final db = await database;
+    final id = await _getNextLocalId('categorie');
     final values = Map<String, Object?>.from(categorie.toJson());
-    values.remove('id');
-    final id = await db.insert("categorie", values);
+    values['id'] = id;
+    await db.insert("categorie", values);
     categorie.id = id;
     return categorie;
   }
@@ -111,9 +118,10 @@ class Dao {
 
   static Future<Auteur> createAuteur(Auteur auteur) async {
     final db = await database;
+    final id = await _getNextLocalId('auteur');
     final values = Map<String, Object?>.from(auteur.toJson());
-    values.remove('id');
-    final id = await db.insert("auteur", values);
+    values['id'] = id;
+    await db.insert("auteur", values);
     auteur.id = id;
     return auteur;
   }
@@ -148,9 +156,10 @@ class Dao {
 
   static Future<Livre> createLivre(Livre livre) async {
     final db = await database;
+    final id = await _getNextLocalId('livre');
     final values = Map<String, Object?>.from(livre.toJson());
-    values.remove('id');
-    final id = await db.insert("livre", values);
+    values['id'] = id;
+    await db.insert("livre", values);
     livre.id = id;
     return livre;
   }

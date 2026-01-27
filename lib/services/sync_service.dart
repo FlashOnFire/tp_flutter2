@@ -3,13 +3,15 @@ import 'package:sqflite/sqflite.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+typedef SyncCallback = void Function(SyncResult result, bool isAutoSync);
+
 class SyncService {
   static const String baseUrl = 'http://localhost:3000/api';
-  static const String lastSyncKey = 'last_sync_timestamp';
 
   final Database database;
   String? _jwtToken;
   Timer? _syncTimer;
+  SyncCallback? onSyncComplete;
 
   SyncService(this.database);
 
@@ -17,10 +19,35 @@ class SyncService {
     _jwtToken = token;
   }
 
+  Future<void> authenticate() async {
+    try {
+      print('[SYNC] Authenticating to get JWT token...');
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': 'admin@mail.com',
+          'password': 'admin123',
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _jwtToken = data['token'];
+        print('[SYNC] SUCCESS: JWT token obtained');
+      } else {
+        print('[SYNC] WARNING: Authentication failed with status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[SYNC] ERROR: Authentication error: $e');
+    }
+  }
+
   void startAutoSync() {
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      syncAll();
+      print('[SYNC] Auto-sync triggered');
+      syncAll(isAutoSync: true);
     });
   }
 
@@ -28,61 +55,41 @@ class SyncService {
     _syncTimer?.cancel();
   }
 
-  Future<DateTime?> getLastSyncTime() async {
-    final result = await database.query(
-      'sync_metadata',
-      where: 'key = ?',
-      whereArgs: [lastSyncKey],
-      limit: 1,
-    );
-
-    if (result.isEmpty) return null;
-
-    return DateTime.parse(result.first['value'] as String);
-  }
-
-  Future<void> saveLastSyncTime(DateTime time) async {
-    await database.insert(
-      'sync_metadata',
-      {'key': lastSyncKey, 'value': time.toIso8601String()},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  Future<SyncResult> syncAll() async {
+  Future<SyncResult> syncAll({bool isAutoSync = false}) async {
     try {
-      print('[SYNC] Starting synchronization...');
-      print('[SYNC] Base URL: $baseUrl');
+      final syncType = isAutoSync ? 'AUTO-SYNC' : 'MANUAL-SYNC';
+      print('[$syncType] Starting synchronization...');
+      print('[$syncType] Base URL: $baseUrl');
 
       try {
-        print('[SYNC] Testing server connectivity...');
+        print('[$syncType] Testing server connectivity...');
         final testResponse = await http.get(
           Uri.parse('$baseUrl/categories'),
         ).timeout(const Duration(seconds: 5));
-        print('[SYNC] Server responded with status: ${testResponse.statusCode}');
+        print('[$syncType] Server responded with status: ${testResponse.statusCode}');
       } catch (e) {
-        print('[SYNC] ERROR: Server connectivity test FAILED: $e');
-        print('[SYNC] ERROR: Make sure API server is running at $baseUrl');
-        return SyncResult(success: false, error: 'Server not reachable: $e');
+        print('[$syncType] ERROR: Server connectivity test FAILED: $e');
+        print('[$syncType] ERROR: Make sure API server is running at $baseUrl');
+        final result = SyncResult(success: false, error: 'Server not reachable: $e');
+        onSyncComplete?.call(result, isAutoSync);
+        return result;
       }
 
-      print('[SYNC] Syncing categories...');
+      print('[$syncType] Syncing categories...');
       final categoriesResult = await syncCategories();
-      print('[SYNC] SUCCESS: Categories: ${categoriesResult.uploaded} uploaded, ${categoriesResult.downloaded} downloaded');
+      print('[$syncType] SUCCESS: Categories: ${categoriesResult.uploaded} uploaded, ${categoriesResult.downloaded} downloaded');
 
-      print('[SYNC] Syncing auteurs...');
+      print('[$syncType] Syncing auteurs...');
       final auteursResult = await syncAuteurs();
-      print('[SYNC] SUCCESS: Auteurs: ${auteursResult.uploaded} uploaded, ${auteursResult.downloaded} downloaded');
+      print('[$syncType] SUCCESS: Auteurs: ${auteursResult.uploaded} uploaded, ${auteursResult.downloaded} downloaded');
 
-      print('[SYNC] Syncing livres...');
+      print('[$syncType] Syncing livres...');
       final livresResult = await syncLivres();
-      print('[SYNC] SUCCESS: Livres: ${livresResult.uploaded} uploaded, ${livresResult.downloaded} downloaded');
+      print('[$syncType] SUCCESS: Livres: ${livresResult.uploaded} uploaded, ${livresResult.downloaded} downloaded');
 
-      await saveLastSyncTime(DateTime.now());
+      print('[$syncType] SUCCESS: Synchronization completed successfully!');
 
-      print('[SYNC] SUCCESS: Synchronization completed successfully!');
-
-      return SyncResult(
+      final result = SyncResult(
         success: true,
         categoriesUploaded: categoriesResult.uploaded,
         categoriesDownloaded: categoriesResult.downloaded,
@@ -91,10 +98,16 @@ class SyncService {
         livresUploaded: livresResult.uploaded,
         livresDownloaded: livresResult.downloaded,
       );
+
+      onSyncComplete?.call(result, isAutoSync);
+      return result;
     } catch (e, stackTrace) {
-      print('[SYNC] ERROR: Fatal error during sync: $e');
-      print('[SYNC] ERROR: Stack trace: $stackTrace');
-      return SyncResult(success: false, error: e.toString());
+      final syncType = isAutoSync ? 'AUTO-SYNC' : 'MANUAL-SYNC';
+      print('[$syncType] ERROR: Fatal error during sync: $e');
+      print('[$syncType] ERROR: Stack trace: $stackTrace');
+      final result = SyncResult(success: false, error: e.toString());
+      onSyncComplete?.call(result, isAutoSync);
+      return result;
     }
   }
 
@@ -107,12 +120,20 @@ class SyncService {
       print('[SYNC-CAT] Found ${localCategories.length} local categories');
 
       for (var cat in localCategories) {
-        if (cat['id'] == null || (cat['id'] as int) < 0) {
+        if (cat['id'] != null && (cat['id'] as int) < 0) {
+          if (_jwtToken == null) {
+            print('[SYNC-CAT] WARNING: JWT token required for category sync');
+            continue;
+          }
+
           print('[SYNC-CAT] Uploading category: ${cat['libelle']} (local ID: ${cat['id']})');
           try {
             final response = await http.post(
               Uri.parse('$baseUrl/categories'),
-              headers: {'Content-Type': 'application/json'},
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $_jwtToken',
+              },
               body: jsonEncode({
                 'libelle': cat['libelle'],
                 'created_at': cat['created_at'],
@@ -196,23 +217,34 @@ class SyncService {
     int downloaded = 0;
 
     final localAuteurs = await database.query('auteur');
+    print('[SYNC-AUT] Found ${localAuteurs.length} local auteurs');
 
     for (var auteur in localAuteurs) {
-      if (auteur['id'] == null || (auteur['id'] as int) < 0) {
+      if (auteur['id'] != null && (auteur['id'] as int) < 0) {
+        if (_jwtToken == null) {
+          print('[SYNC-AUT] WARNING: JWT token required for auteur sync');
+          continue;
+        }
+
+        print('[SYNC-AUT] Uploading auteur: ${auteur['nom']} ${auteur['prenoms']} (local ID: ${auteur['id']})');
         try {
           final response = await http.post(
             Uri.parse('$baseUrl/auteurs'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $_jwtToken',
+            },
             body: jsonEncode({
               'nom': auteur['nom'],
-              'prenom': auteur['prenom'],
-              'mail': auteur['mail'],
+              'prenom': auteur['prenoms'],
+              'mail': auteur['email'],
               'created_at': auteur['created_at'],
             }),
           );
 
           if (response.statusCode == 201) {
             final serverData = jsonDecode(response.body);
+            print('[SYNC-AUT] SUCCESS: Auteur uploaded, server ID: ${serverData['id']}');
             await database.update(
               'auteur',
               {'id': serverData['id']},
@@ -220,9 +252,11 @@ class SyncService {
               whereArgs: [auteur['id']],
             );
             uploaded++;
+          } else {
+            print('[SYNC-AUT] WARNING: Upload failed with status: ${response.statusCode}');
           }
         } catch (e) {
-          print('Error uploading auteur: $e');
+          print('[SYNC-AUT] ERROR: Error uploading auteur: $e');
         }
       }
     }
@@ -232,6 +266,7 @@ class SyncService {
 
       if (response.statusCode == 200) {
         final List<dynamic> serverAuteurs = jsonDecode(response.body);
+        print('[SYNC-AUT] Received ${serverAuteurs.length} auteurs from server');
 
         for (var serverAuteur in serverAuteurs) {
           final existing = await database.query(
@@ -241,11 +276,12 @@ class SyncService {
           );
 
           if (existing.isEmpty) {
+            print('[SYNC-AUT] New auteur from server: ${serverAuteur['nom']} (ID: ${serverAuteur['id']})');
             await database.insert('auteur', {
               'id': serverAuteur['id'],
               'nom': serverAuteur['nom'],
-              'prenom': serverAuteur['prenom'],
-              'mail': serverAuteur['mail'],
+              'prenoms': serverAuteur['prenom'],
+              'email': serverAuteur['mail'],
               'created_at': serverAuteur['created_at'],
             });
             downloaded++;
@@ -254,12 +290,13 @@ class SyncService {
             final serverCreatedAt = DateTime.parse(serverAuteur['created_at']);
 
             if (serverCreatedAt.isAfter(localCreatedAt)) {
+              print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer)');
               await database.update(
                 'auteur',
                 {
                   'nom': serverAuteur['nom'],
-                  'prenom': serverAuteur['prenom'],
-                  'mail': serverAuteur['mail'],
+                  'prenoms': serverAuteur['prenom'],
+                  'email': serverAuteur['mail'],
                   'created_at': serverAuteur['created_at'],
                 },
                 where: 'id = ?',
@@ -270,7 +307,7 @@ class SyncService {
         }
       }
     } catch (e) {
-      print('Error downloading auteurs: $e');
+      print('[SYNC-AUT] ERROR: Error downloading auteurs: $e');
     }
 
     return EntitySyncResult(uploaded: uploaded, downloaded: downloaded);
@@ -281,14 +318,24 @@ class SyncService {
     int downloaded = 0;
 
     final localLivres = await database.query('livre');
+    print('[SYNC-LIV] Found ${localLivres.length} local livres');
 
     for (var livre in localLivres) {
-      if (livre['id'] == null || (livre['id'] as int) < 0) {
+      if (livre['id'] != null && (livre['id'] as int) < 0) {
         if (_jwtToken == null) {
-          print('JWT token required for livre sync');
+          print('[SYNC-LIV] WARNING: JWT token required for livre sync');
           continue;
         }
 
+        final auteurId = livre['auteur_id'] as int;
+        final categorieId = livre['categorie_id'] as int;
+
+        if (auteurId < 0 || categorieId < 0) {
+          print('[SYNC-LIV] SKIP: Cannot upload livre "${livre['libelle']}" - auteur (ID: $auteurId) or categorie (ID: $categorieId) not yet synced');
+          continue;
+        }
+
+        print('[SYNC-LIV] Uploading livre: ${livre['libelle']} (local ID: ${livre['id']})');
         try {
           final response = await http.post(
             Uri.parse('$baseUrl/livres'),
@@ -299,14 +346,15 @@ class SyncService {
             body: jsonEncode({
               'libelle': livre['libelle'],
               'description': livre['description'],
-              'auteur_id': livre['auteur_id'],
-              'categorie_id': livre['categorie_id'],
+              'auteur_id': auteurId,
+              'categorie_id': categorieId,
               'created_at': livre['created_at'],
             }),
           );
 
           if (response.statusCode == 201) {
             final serverData = jsonDecode(response.body);
+            print('[SYNC-LIV] SUCCESS: Livre uploaded, server ID: ${serverData['id']}');
             await database.update(
               'livre',
               {'id': serverData['id']},
@@ -314,9 +362,11 @@ class SyncService {
               whereArgs: [livre['id']],
             );
             uploaded++;
+          } else {
+            print('[SYNC-LIV] WARNING: Upload failed with status: ${response.statusCode}, body: ${response.body}');
           }
         } catch (e) {
-          print('Error uploading livre: $e');
+          print('[SYNC-LIV] ERROR: Error uploading livre: $e');
         }
       }
     }
@@ -326,6 +376,7 @@ class SyncService {
 
       if (response.statusCode == 200) {
         final List<dynamic> serverLivres = jsonDecode(response.body);
+        print('[SYNC-LIV] Received ${serverLivres.length} livres from server');
 
         for (var serverLivre in serverLivres) {
           final existing = await database.query(
@@ -335,6 +386,7 @@ class SyncService {
           );
 
           if (existing.isEmpty) {
+            print('[SYNC-LIV] New livre from server: ${serverLivre['libelle']} (ID: ${serverLivre['id']})');
             await database.insert('livre', {
               'id': serverLivre['id'],
               'libelle': serverLivre['libelle'],
@@ -349,6 +401,7 @@ class SyncService {
             final serverCreatedAt = DateTime.parse(serverLivre['created_at']);
 
             if (serverCreatedAt.isAfter(localCreatedAt)) {
+              print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer)');
               await database.update(
                 'livre',
                 {
@@ -366,7 +419,7 @@ class SyncService {
         }
       }
     } catch (e) {
-      print('Error downloading livres: $e');
+      print('[SYNC-LIV] ERROR: Error downloading livres: $e');
     }
 
     return EntitySyncResult(uploaded: uploaded, downloaded: downloaded);

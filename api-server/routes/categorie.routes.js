@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const categorieController = require("../controllers/categorie.controller");
+const auth = require("../middlewares/auth.middleware");
 
 /**
  * @swagger
@@ -43,6 +44,8 @@ router.get("/:id", categorieController.getOne);
  *   post:
  *     summary: Créer une nouvelle catégorie
  *     tags: [Catégories]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -61,10 +64,12 @@ router.get("/:id", categorieController.getOne);
  *     responses:
  *       201:
  *         description: Catégorie créée
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.post("/", categorieController.create);
+router.post("/", auth, categorieController.create);
 
 /**
  * @swagger
@@ -72,6 +77,8 @@ router.post("/", categorieController.create);
  *   put:
  *     summary: Modifier une catégorie
  *     tags: [Catégories]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -91,10 +98,12 @@ router.post("/", categorieController.create);
  *     responses:
  *       200:
  *         description: Catégorie mise à jour
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.put("/:id", categorieController.update);
+router.put("/:id", auth, categorieController.update);
 
 /**
  * @swagger
@@ -102,6 +111,8 @@ router.put("/:id", categorieController.update);
  *   delete:
  *     summary: Supprimer une catégorie
  *     tags: [Catégories]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -112,9 +123,11 @@ router.put("/:id", categorieController.update);
  *     responses:
  *       200:
  *         description: Catégorie supprimée
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.delete("/:id", categorieController.remove);
+router.delete("/:id", auth, categorieController.remove);
 
 module.exports = router;

@@ -20,11 +20,14 @@ void main() async {
   print('[APP] Creating sync service...');
   syncService = SyncService(db);
 
-  print('[APP] Starting automatic sync (30 second interval)...');
+  print('[APP] Authenticating to API...');
+  await syncService!.authenticate();
+
+  print('[APP] Starting automatic sync...');
   syncService!.startAutoSync();
 
   print('[APP] Performing initial sync...');
-  syncService!.syncAll().then((result) {
+  syncService!.syncAll(isAutoSync: false).then((result) {
     if (result.success) {
       print('[APP] SUCCESS: Initial sync completed successfully');
     } else {

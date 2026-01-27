@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const auteurController = require("../controllers/auteur.controller");
+const auth = require("../middlewares/auth.middleware");
 
 /**
  * @swagger
@@ -43,6 +44,8 @@ router.get("/:id", auteurController.getOne);
  *   post:
  *     summary: Créer un nouvel auteur
  *     tags: [Auteurs]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -66,10 +69,12 @@ router.get("/:id", auteurController.getOne);
  *     responses:
  *       201:
  *         description: Auteur créé
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.post("/", auteurController.create);
+router.post("/", auth, auteurController.create);
 
 /**
  * @swagger
@@ -77,6 +82,8 @@ router.post("/", auteurController.create);
  *   put:
  *     summary: Modifier un auteur
  *     tags: [Auteurs]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -100,10 +107,12 @@ router.post("/", auteurController.create);
  *     responses:
  *       200:
  *         description: Auteur mis à jour
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.put("/:id", auteurController.update);
+router.put("/:id", auth, auteurController.update);
 
 /**
  * @swagger
@@ -111,6 +120,8 @@ router.put("/:id", auteurController.update);
  *   delete:
  *     summary: Supprimer un auteur
  *     tags: [Auteurs]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -121,9 +132,11 @@ router.put("/:id", auteurController.update);
  *     responses:
  *       200:
  *         description: Auteur supprimé
+ *       401:
+ *         description: Non autorisé
  *       500:
  *         description: Erreur serveur
  */
-router.delete("/:id", auteurController.remove);
+router.delete("/:id", auth, auteurController.remove);
 
 module.exports = router;
