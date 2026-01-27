@@ -5,24 +5,18 @@ import 'package:tp_flutter2/models/categorie.dart';
 import 'package:tp_flutter2/models/livre.dart';
 
 class Dao {
-  //La reférence de notre base de données
   static Database? _database;
 
-  //Un getter qui renvoie l'objet de base de donnée.
-  //Si la base n'existe pas _initDB la créé
   static Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('bibliotheca.db');
     return _database!;
   }
 
-  //_initDB initialise notre base de données.
   static Future<Database> _initDB(String filePath) async {
     final dbPath = await databaseFactory.getDatabasesPath();
     final path = join(dbPath, filePath);
     print('Database path: $path');
-    //openDatabase ouvre notre base de données située à l'emplacement "path"
-    //si la base n'existe pas openDatabase exécute _createDB
     return await databaseFactory.openDatabase(path,
       options: OpenDatabaseOptions(
         version: 1,
@@ -31,8 +25,6 @@ class Dao {
     );
   }
 
-  //_createDB est la méthode qui s'occupe de la définition des tables de notre base de données
-  //_createDB exécute les transactions de base de données qui pour créer les tables
   static Future _createDB(Database db, int version) async {
     print('Creating database tables...');
     await db.execute('''
@@ -40,13 +32,15 @@ class Dao {
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  nom VARCHAR(255) NOT NULL,
  prenoms VARCHAR(255) NOT NULL,
- email VARCHAR(255)
+ email VARCHAR(255),
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
     await db.execute('''
  CREATE TABLE categorie (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
- libelle VARCHAR(255) NOT NULL
+ libelle VARCHAR(255) NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
     await db.execute('''
@@ -55,7 +49,14 @@ class Dao {
  libelle VARCHAR(255) NOT NULL,
  description TEXT,
  auteur_id INTEGER NOT NULL,
- categorie_id INTEGER NOT NULL
+ categorie_id INTEGER NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ )
+ ''');
+    await db.execute('''
+ CREATE TABLE sync_metadata (
+ key TEXT PRIMARY KEY,
+ value TEXT NOT NULL
  )
  ''');
   }
@@ -70,15 +71,6 @@ class Dao {
     }
   }
 
-  // static Future<int> updateCategorie(Categorie categorie) async {
-  //   final db = await database;
-  //   return db.update(
-  //     "categorie",
-  //     categorie.toJson().remove("id"),
-  //     where: 'id = ?',
-  //     whereArgs: [categorie.id],
-  //   );
-  // }
 
   static Future<int> updateCategorie(Categorie categorie) async {
     final db = await database;
@@ -106,7 +98,6 @@ class Dao {
     return await db.delete("categorie", where: 'id = ?', whereArgs: [id]);
   }
 
-  // ==================== Auteur methods ====================
 
   static Future<List<Auteur>> listeAuteur() async {
     final db = await database;
@@ -144,7 +135,6 @@ class Dao {
     return await db.delete("auteur", where: 'id = ?', whereArgs: [id]);
   }
 
-  // ==================== Livre methods ====================
 
   static Future<List<Livre>> listeLivre() async {
     final db = await database;
