@@ -17,7 +17,16 @@ exports.getAll = (req, res) => {
   });
 };
 
-// ...existing code...
+exports.getOne = (req, res) => {
+  db.query(
+    "SELECT * FROM livre WHERE id=?",
+    [req.params.id],
+    (err, results) => {
+      if (err) return res.status(500).json(err);
+      res.json(results[0]);
+    }
+  );
+};
 
 exports.create = (req, res) => {
   const { libelle, description, auteur_id, categorie_id, updated_at } = req.body;

@@ -213,7 +213,11 @@ class SyncService {
           print('[SYNC-CAT] Received ${serverCategories.length} categories from server');
 
           for (var serverCat in serverCategories) {
-            final serverUpdatedAt = DateTime.parse(serverCat['updated_at']);
+            // Convert MySQL datetime format to ISO format for parsing
+            final updatedAtStr = (serverCat['updated_at'] as String).replaceAll(' ', 'T');
+            final serverUpdatedAt = DateTime.parse(updatedAtStr);
+
+            print('[SYNC-CAT] Processing category: ${serverCat['libelle']}, updated_at: ${serverCat['updated_at']}, lastSync: ${lastSync?.toIso8601String() ?? "null"}');
 
             // Only process if newer than last sync
             if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
@@ -232,7 +236,8 @@ class SyncService {
                 });
                 downloaded++;
               } else {
-                final localUpdatedAt = DateTime.parse(existing.first['updated_at'] as String);
+                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
+                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
                   print('[SYNC-CAT] Updating category ${serverCat['libelle']} (server is newer)');
@@ -248,6 +253,8 @@ class SyncService {
                   downloaded++;
                 }
               }
+            } else {
+              print('[SYNC-CAT] SKIP: Category ${serverCat['libelle']} not newer than lastSync');
             }
           }
         }
@@ -340,7 +347,9 @@ class SyncService {
           print('[SYNC-AUT] Received ${serverAuteurs.length} auteurs from server');
 
           for (var serverAuteur in serverAuteurs) {
-            final serverUpdatedAt = DateTime.parse(serverAuteur['updated_at']);
+            // Convert MySQL datetime format to ISO format for parsing
+            final updatedAtStr = (serverAuteur['updated_at'] as String).replaceAll(' ', 'T');
+            final serverUpdatedAt = DateTime.parse(updatedAtStr);
 
             // Only process if newer than last sync
             if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
@@ -361,7 +370,8 @@ class SyncService {
                 });
                 downloaded++;
               } else {
-                final localUpdatedAt = DateTime.parse(existing.first['updated_at'] as String);
+                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
+                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
                   print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer)');
@@ -473,7 +483,9 @@ class SyncService {
           print('[SYNC-LIV] Received ${serverLivres.length} livres from server');
 
           for (var serverLivre in serverLivres) {
-            final serverUpdatedAt = DateTime.parse(serverLivre['updated_at']);
+            // Convert MySQL datetime format to ISO format for parsing
+            final updatedAtStr = (serverLivre['updated_at'] as String).replaceAll(' ', 'T');
+            final serverUpdatedAt = DateTime.parse(updatedAtStr);
 
             // Only process if newer than last sync
             if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
@@ -495,7 +507,8 @@ class SyncService {
                 });
                 downloaded++;
               } else {
-                final localUpdatedAt = DateTime.parse(existing.first['updated_at'] as String);
+                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
+                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
                   print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer)');
