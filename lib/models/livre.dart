@@ -4,7 +4,7 @@ class Livre {
   String? description;
   int? categorieId;
   int? auteurId;
-  String? createdAt;
+  String? updatedAt;
 
   Livre({
     this.id,
@@ -12,7 +12,7 @@ class Livre {
     this.description,
     this.auteurId,
     this.categorieId,
-    this.createdAt,
+    this.updatedAt,
   });
 
   Livre.fromJson(Map<String, dynamic> json) {
@@ -21,7 +21,7 @@ class Livre {
     description = json["description"];
     auteurId = json["auteur_id"];
     categorieId = json["categorie_id"];
-    createdAt = json["created_at"] ?? DateTime.now().toIso8601String();
+    updatedAt = json["updated_at"] ?? DateTime.now().toIso8601String();
   }
 
   Map<String, dynamic> toJson() {
@@ -31,7 +31,7 @@ class Livre {
     map["description"] = description;
     map["auteur_id"] = auteurId;
     map["categorie_id"] = categorieId;
-    map["created_at"] = createdAt ?? DateTime.now().toIso8601String();
+    map["updated_at"] = updatedAt ?? DateTime.now().toIso8601String();
     return map;
   }
 }

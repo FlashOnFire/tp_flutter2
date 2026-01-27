@@ -19,27 +19,35 @@ exports.getOne = (req, res) => {
 };
 
 exports.create = (req, res) => {
-  const { nom, prenom, mail, created_at } = req.body;
-  const timestamp = created_at || new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const { nom, prenom, mail, updated_at } = req.body;
+  const timestamp = updated_at ? new Date(updated_at).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
 
   db.query(
-    "INSERT INTO auteur (nom, prenom, mail, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO auteur (nom, prenom, mail, updated_at) VALUES (?, ?, ?, ?)",
     [nom, prenom, mail, timestamp],
     (err, result) => {
       if (err) return res.status(500).json(err);
-      res.status(201).json({ id: result.insertId, created_at: timestamp });
+      res.status(201).json({
+        id: result.insertId,
+        nom,
+        prenom,
+        mail,
+        updated_at: timestamp
+      });
     }
   );
 };
 
 exports.update = (req, res) => {
-  const { nom, prenom, mail } = req.body;
+  const { nom, prenom, mail, updated_at } = req.body;
+  const timestamp = updated_at ? new Date(updated_at).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+
   db.query(
-    "UPDATE auteur SET nom=?, prenom=?, mail=? WHERE id=?",
-    [nom, prenom, mail, req.params.id],
+    "UPDATE auteur SET nom=?, prenom=?, mail=?, updated_at=? WHERE id=?",
+    [nom, prenom, mail, timestamp, req.params.id],
     (err) => {
       if (err) return res.status(500).json(err);
-      res.json({ message: "Auteur mis à jour" });
+      res.json({ message: "Auteur mis à jour", updated_at: timestamp });
     }
   );
 };
