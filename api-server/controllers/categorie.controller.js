@@ -20,7 +20,9 @@ exports.getOne = (req, res) => {
 
 exports.create = (req, res) => {
   const { libelle, updated_at, is_deleted } = req.body;
-  const timestamp = updated_at ? new Date(updated_at).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const timestamp = updated_at
+    ? updated_at.replace('T', ' ').substring(0, 19)
+    : new Date().toISOString().slice(0, 19).replace('T', ' ');
   const deleted = is_deleted ? 1 : 0;
 
   db.query(
@@ -40,7 +42,10 @@ exports.create = (req, res) => {
 
 exports.update = (req, res) => {
   const { libelle, updated_at, is_deleted } = req.body;
-  const timestamp = updated_at ? new Date(updated_at).toISOString().slice(0, 19).replace('T', ' ') : new Date().toISOString().slice(0, 19).replace('T', ' ');
+  // Preserve client timestamp exactly - just format for MySQL (replace T with space, truncate to seconds)
+  const timestamp = updated_at
+    ? updated_at.replace('T', ' ').substring(0, 19)
+    : new Date().toISOString().slice(0, 19).replace('T', ' ');
   const deleted = is_deleted !== undefined ? (is_deleted ? 1 : 0) : 0;
 
   db.query(

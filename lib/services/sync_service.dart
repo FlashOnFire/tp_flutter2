@@ -140,9 +140,10 @@ class SyncService {
   Future<EntitySyncResult> syncCategories(DateTime? lastSync) async {
     int uploaded = 0;
     int downloaded = 0;
+    Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes (categories updated since last sync)
+      // Upload local changes first (categories updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -178,6 +179,7 @@ class SyncService {
           if (updateResponse.statusCode == 200) {
             print('[SYNC-CAT] SUCCESS: Category updated on server');
             uploaded++;
+            uploadedIds.add(cat['id'] as int);
           } else {
             // If update fails, try to create
             final createResponse = await http.post(
@@ -196,6 +198,7 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               print('[SYNC-CAT] SUCCESS: Category created on server');
               uploaded++;
+              uploadedIds.add(cat['id'] as int);
             } else {
               print('[SYNC-CAT] WARNING: Upload failed with status: ${createResponse.statusCode}');
             }
@@ -205,7 +208,7 @@ class SyncService {
         }
       }
 
-      // Download server changes (categories updated since last sync)
+      // Download server changes (skip items we just uploaded)
       try {
         final response = await http.get(Uri.parse('$baseUrl/categories'));
         print('[SYNC-CAT] Server response status: ${response.statusCode}');
@@ -215,14 +218,21 @@ class SyncService {
           print('[SYNC-CAT] Received ${serverCategories.length} categories from server');
 
           for (var serverCat in serverCategories) {
+            // Skip if we just uploaded this item
+            if (uploadedIds.contains(serverCat['id'] as int)) {
+              print('[SYNC-CAT] SKIP download: Category ${serverCat['libelle']} was just uploaded');
+              continue;
+            }
+
             // Convert MySQL datetime format to ISO format for parsing
             final updatedAtStr = (serverCat['updated_at'] as String).replaceAll(' ', 'T');
             final serverUpdatedAt = DateTime.parse(updatedAtStr);
 
-            print('[SYNC-CAT] Processing category: ${serverCat['libelle']}, updated_at: ${serverCat['updated_at']}, lastSync: ${lastSync?.toIso8601String() ?? "null"}');
+            final isNewerThanLastSync = lastSync == null || serverUpdatedAt.isAfter(lastSync);
+            print('[SYNC-CAT] Processing category: ${serverCat['libelle']}, serverUpdatedAt: $serverUpdatedAt, lastSync: $lastSync, isNewer: $isNewerThanLastSync');
 
             // Only process if newer than last sync
-            if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
+            if (isNewerThanLastSync) {
               final existing = await database.query(
                 'categorie',
                 where: 'id = ?',
@@ -242,7 +252,11 @@ class SyncService {
                 final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
-                if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
+                final serverUtc = serverUpdatedAt.toUtc();
+                final localUtc = localUpdatedAt.toUtc();
+
+                if (serverUtc.isAfter(localUtc)) {
                   print('[SYNC-CAT] Updating category ${serverCat['libelle']} (server is newer, is_deleted: ${serverCat['is_deleted']})');
                   await database.update(
                     'categorie',
@@ -275,9 +289,10 @@ class SyncService {
   Future<EntitySyncResult> syncAuteurs(DateTime? lastSync) async {
     int uploaded = 0;
     int downloaded = 0;
+    Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes (auteurs updated since last sync)
+      // Upload local changes first (auteurs updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -315,6 +330,7 @@ class SyncService {
           if (updateResponse.statusCode == 200) {
             print('[SYNC-AUT] SUCCESS: Auteur updated on server');
             uploaded++;
+            uploadedIds.add(auteur['id'] as int);
           } else {
             // If update fails, try to create
             final createResponse = await http.post(
@@ -335,6 +351,7 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               print('[SYNC-AUT] SUCCESS: Auteur created on server');
               uploaded++;
+              uploadedIds.add(auteur['id'] as int);
             } else {
               print('[SYNC-AUT] WARNING: Upload failed with status: ${createResponse.statusCode}');
             }
@@ -344,7 +361,7 @@ class SyncService {
         }
       }
 
-      // Download server changes
+      // Download server changes (skip items we just uploaded)
       try {
         final response = await http.get(Uri.parse('$baseUrl/auteurs'));
 
@@ -353,6 +370,12 @@ class SyncService {
           print('[SYNC-AUT] Received ${serverAuteurs.length} auteurs from server');
 
           for (var serverAuteur in serverAuteurs) {
+            // Skip if we just uploaded this item
+            if (uploadedIds.contains(serverAuteur['id'] as int)) {
+              print('[SYNC-AUT] SKIP download: Auteur ${serverAuteur['nom']} was just uploaded');
+              continue;
+            }
+
             // Convert MySQL datetime format to ISO format for parsing
             final updatedAtStr = (serverAuteur['updated_at'] as String).replaceAll(' ', 'T');
             final serverUpdatedAt = DateTime.parse(updatedAtStr);
@@ -380,7 +403,11 @@ class SyncService {
                 final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
-                if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
+                final serverUtc = serverUpdatedAt.toUtc();
+                final localUtc = localUpdatedAt.toUtc();
+
+                if (serverUtc.isAfter(localUtc)) {
                   print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer, is_deleted: ${serverAuteur['is_deleted']})');
                   await database.update(
                     'auteur',
@@ -413,9 +440,10 @@ class SyncService {
   Future<EntitySyncResult> syncLivres(DateTime? lastSync) async {
     int uploaded = 0;
     int downloaded = 0;
+    Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes (livres updated since last sync)
+      // Upload local changes first (livres updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -454,6 +482,7 @@ class SyncService {
           if (updateResponse.statusCode == 200) {
             print('[SYNC-LIV] SUCCESS: Livre updated on server');
             uploaded++;
+            uploadedIds.add(livre['id'] as int);
           } else {
             // If update fails, try to create
             final createResponse = await http.post(
@@ -475,6 +504,7 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               print('[SYNC-LIV] SUCCESS: Livre created on server');
               uploaded++;
+              uploadedIds.add(livre['id'] as int);
             } else {
               print('[SYNC-LIV] WARNING: Upload failed with status: ${createResponse.statusCode}, body: ${createResponse.body}');
             }
@@ -484,7 +514,7 @@ class SyncService {
         }
       }
 
-      // Download server changes
+      // Download server changes (skip items we just uploaded)
       try {
         final response = await http.get(Uri.parse('$baseUrl/livres'));
 
@@ -493,6 +523,12 @@ class SyncService {
           print('[SYNC-LIV] Received ${serverLivres.length} livres from server');
 
           for (var serverLivre in serverLivres) {
+            // Skip if we just uploaded this item
+            if (uploadedIds.contains(serverLivre['id'] as int)) {
+              print('[SYNC-LIV] SKIP download: Livre ${serverLivre['libelle']} was just uploaded');
+              continue;
+            }
+
             // Convert MySQL datetime format to ISO format for parsing
             final updatedAtStr = (serverLivre['updated_at'] as String).replaceAll(' ', 'T');
             final serverUpdatedAt = DateTime.parse(updatedAtStr);
@@ -521,8 +557,13 @@ class SyncService {
                 final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
-                if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
+                final serverUtc = serverUpdatedAt.toUtc();
+                final localUtc = localUpdatedAt.toUtc();
+
+                if (serverUtc.isAfter(localUtc)) {
                   print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer, is_deleted: ${serverLivre['is_deleted']})');
+                  print('[SYNC-LIV] DEBUG: serverUpdatedAt=$serverUpdatedAt, localUpdatedAt=$localUpdatedAt');
                   await database.update(
                     'livre',
                     {
