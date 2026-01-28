@@ -159,7 +159,7 @@ class SyncService {
           continue;
         }
 
-        print('[SYNC-CAT] Uploading/updating category: ${cat['libelle']} (ID: ${cat['id']})');
+        print('[SYNC-CAT] Uploading/updating category: ${cat['libelle']} (ID: ${cat['id']}, is_deleted: ${cat['is_deleted']})');
         try {
           // Try to update first (if it exists on server)
           final updateResponse = await http.put(
@@ -170,6 +170,7 @@ class SyncService {
             },
             body: jsonEncode({
               'libelle': cat['libelle'],
+              'is_deleted': cat['is_deleted'] == 1,
               'updated_at': cat['updated_at'],
             }),
           );
@@ -187,6 +188,7 @@ class SyncService {
               },
               body: jsonEncode({
                 'libelle': cat['libelle'],
+                'is_deleted': cat['is_deleted'] == 1,
                 'updated_at': cat['updated_at'],
               }),
             );
@@ -232,6 +234,7 @@ class SyncService {
                 await database.insert('categorie', {
                   'id': serverCat['id'],
                   'libelle': serverCat['libelle'],
+                  'is_deleted': serverCat['is_deleted'] ?? 0,
                   'updated_at': serverCat['updated_at'],
                 });
                 downloaded++;
@@ -240,11 +243,12 @@ class SyncService {
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
-                  print('[SYNC-CAT] Updating category ${serverCat['libelle']} (server is newer)');
+                  print('[SYNC-CAT] Updating category ${serverCat['libelle']} (server is newer, is_deleted: ${serverCat['is_deleted']})');
                   await database.update(
                     'categorie',
                     {
                       'libelle': serverCat['libelle'],
+                      'is_deleted': serverCat['is_deleted'] ?? 0,
                       'updated_at': serverCat['updated_at'],
                     },
                     where: 'id = ?',
@@ -290,7 +294,7 @@ class SyncService {
           continue;
         }
 
-        print('[SYNC-AUT] Uploading/updating auteur: ${auteur['nom']} ${auteur['prenoms']} (ID: ${auteur['id']})');
+        print('[SYNC-AUT] Uploading/updating auteur: ${auteur['nom']} ${auteur['prenoms']} (ID: ${auteur['id']}, is_deleted: ${auteur['is_deleted']})');
         try {
           // Try to update first
           final updateResponse = await http.put(
@@ -303,6 +307,7 @@ class SyncService {
               'nom': auteur['nom'],
               'prenom': auteur['prenoms'],
               'mail': auteur['email'],
+              'is_deleted': auteur['is_deleted'] == 1,
               'updated_at': auteur['updated_at'],
             }),
           );
@@ -322,6 +327,7 @@ class SyncService {
                 'nom': auteur['nom'],
                 'prenom': auteur['prenoms'],
                 'mail': auteur['email'],
+                'is_deleted': auteur['is_deleted'] == 1,
                 'updated_at': auteur['updated_at'],
               }),
             );
@@ -366,6 +372,7 @@ class SyncService {
                   'nom': serverAuteur['nom'],
                   'prenoms': serverAuteur['prenom'],
                   'email': serverAuteur['mail'],
+                  'is_deleted': serverAuteur['is_deleted'] ?? 0,
                   'updated_at': serverAuteur['updated_at'],
                 });
                 downloaded++;
@@ -374,13 +381,14 @@ class SyncService {
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
-                  print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer)');
+                  print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer, is_deleted: ${serverAuteur['is_deleted']})');
                   await database.update(
                     'auteur',
                     {
                       'nom': serverAuteur['nom'],
                       'prenoms': serverAuteur['prenom'],
                       'email': serverAuteur['mail'],
+                      'is_deleted': serverAuteur['is_deleted'] ?? 0,
                       'updated_at': serverAuteur['updated_at'],
                     },
                     where: 'id = ?',
@@ -424,7 +432,7 @@ class SyncService {
           continue;
         }
 
-        print('[SYNC-LIV] Uploading/updating livre: ${livre['libelle']} (ID: ${livre['id']})');
+        print('[SYNC-LIV] Uploading/updating livre: ${livre['libelle']} (ID: ${livre['id']}, is_deleted: ${livre['is_deleted']})');
         try {
           // Try to update first
           final updateResponse = await http.put(
@@ -438,6 +446,7 @@ class SyncService {
               'description': livre['description'],
               'auteur_id': livre['auteur_id'],
               'categorie_id': livre['categorie_id'],
+              'is_deleted': livre['is_deleted'] == 1,
               'updated_at': livre['updated_at'],
             }),
           );
@@ -458,6 +467,7 @@ class SyncService {
                 'description': livre['description'],
                 'auteur_id': livre['auteur_id'],
                 'categorie_id': livre['categorie_id'],
+                'is_deleted': livre['is_deleted'] == 1,
                 'updated_at': livre['updated_at'],
               }),
             );
@@ -503,6 +513,7 @@ class SyncService {
                   'description': serverLivre['description'],
                   'auteur_id': serverLivre['auteur_id'],
                   'categorie_id': serverLivre['categorie_id'],
+                  'is_deleted': serverLivre['is_deleted'] ?? 0,
                   'updated_at': serverLivre['updated_at'],
                 });
                 downloaded++;
@@ -511,7 +522,7 @@ class SyncService {
                 final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
 
                 if (serverUpdatedAt.isAfter(localUpdatedAt)) {
-                  print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer)');
+                  print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer, is_deleted: ${serverLivre['is_deleted']})');
                   await database.update(
                     'livre',
                     {
@@ -519,6 +530,7 @@ class SyncService {
                       'description': serverLivre['description'],
                       'auteur_id': serverLivre['auteur_id'],
                       'categorie_id': serverLivre['categorie_id'],
+                      'is_deleted': serverLivre['is_deleted'] ?? 0,
                       'updated_at': serverLivre['updated_at'],
                     },
                     where: 'id = ?',

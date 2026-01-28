@@ -93,12 +93,20 @@ Identifiants par défaut :
 
 ### Tables
 
-Toutes les tables incluent un champ `created_at` pour la synchronisation :
+Toutes les tables incluent des champs `updated_at` et `is_deleted` pour la synchronisation :
 
-- `auteur` : id, nom, prenom, mail, created_at
-- `categorie` : id, libelle, created_at
-- `livre` : id, libelle, description, auteur_id, categorie_id, created_at
+- `auteur` : id, nom, prenom, mail, is_deleted, updated_at
+- `categorie` : id, libelle, is_deleted, updated_at
+- `livre` : id, libelle, description, auteur_id, categorie_id, is_deleted, updated_at
 - `sync_metadata` : key, value
+
+### Soft-Delete
+
+Les suppressions utilisent un mécanisme de "soft-delete" :
+- Les éléments supprimés ne sont pas réellement effacés, mais marqués avec `is_deleted = 1`
+- Le champ `updated_at` est mis à jour lors de la suppression pour la synchronisation
+- Les listes n'affichent que les éléments avec `is_deleted = 0`
+- Les conflits sont résolus en comparant les timestamps : la modification la plus récente gagne
 
 ## Endpoints API
 
@@ -129,8 +137,9 @@ Toutes les tables incluent un champ `created_at` pour la synchronisation :
 ### Résolution de conflits
 
 Si un objet existe à la fois localement et sur le serveur :
-- Comparaison des timestamps `created_at`
+- Comparaison des timestamps `updated_at`
 - La version la plus récente est conservée
+- Les suppressions sont traitées comme des modifications : si la suppression est plus récente qu'une modification, l'élément reste supprimé
 
 ## Arrêt des services
 

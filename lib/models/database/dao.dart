@@ -33,6 +33,7 @@ class Dao {
  nom VARCHAR(255) NOT NULL,
  prenoms VARCHAR(255) NOT NULL,
  email VARCHAR(255),
+ is_deleted INTEGER NOT NULL DEFAULT 0,
  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
@@ -40,6 +41,7 @@ class Dao {
  CREATE TABLE categorie (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  libelle VARCHAR(255) NOT NULL,
+ is_deleted INTEGER NOT NULL DEFAULT 0,
  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
@@ -50,6 +52,7 @@ class Dao {
  description TEXT,
  auteur_id INTEGER NOT NULL,
  categorie_id INTEGER NOT NULL,
+ is_deleted INTEGER NOT NULL DEFAULT 0,
  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
  )
  ''');
@@ -64,7 +67,7 @@ class Dao {
 
   static Future<List<Categorie>> listeCategorie() async {
     final db = await database;
-    final maps = await db.query("categorie", columns: ["*"]);
+    final maps = await db.query("categorie", columns: ["*"], where: 'is_deleted = 0');
     if (maps.isNotEmpty) {
       return maps.map((e) => Categorie.fromJson(e)).toList();
     } else {
@@ -98,13 +101,21 @@ class Dao {
 
   static Future<int> delete(int id) async {
     final db = await database;
-    return await db.delete("categorie", where: 'id = ?', whereArgs: [id]);
+    return await db.update(
+      "categorie",
+      {
+        'is_deleted': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
 
   static Future<List<Auteur>> listeAuteur() async {
     final db = await database;
-    final maps = await db.query("auteur", columns: ["*"]);
+    final maps = await db.query("auteur", columns: ["*"], where: 'is_deleted = 0');
     if (maps.isNotEmpty) {
       return maps.map((e) => Auteur.fromJson(e)).toList();
     } else {
@@ -137,13 +148,21 @@ class Dao {
 
   static Future<int> deleteAuteur(int id) async {
     final db = await database;
-    return await db.delete("auteur", where: 'id = ?', whereArgs: [id]);
+    return await db.update(
+      "auteur",
+      {
+        'is_deleted': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
 
   static Future<List<Livre>> listeLivre() async {
     final db = await database;
-    final maps = await db.query("livre", columns: ["*"]);
+    final maps = await db.query("livre", columns: ["*"], where: 'is_deleted = 0');
     if (maps.isNotEmpty) {
       return maps.map((e) => Livre.fromJson(e)).toList();
     } else {
@@ -176,6 +195,14 @@ class Dao {
 
   static Future<int> deleteLivre(int id) async {
     final db = await database;
-    return await db.delete("livre", where: 'id = ?', whereArgs: [id]);
+    return await db.update(
+      "livre",
+      {
+        'is_deleted': 1,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 }
