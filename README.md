@@ -1,6 +1,8 @@
 # Bibliotheca - Application de gestion de bibliothèque
 
 Application Flutter avec API REST Node.js/Express et base de données MySQL pour gérer une bibliothèque (livres, auteurs, catégories).
+Guillaume CALDERON
+Thibaut LARACINE
 
 ## Prérequis
 
