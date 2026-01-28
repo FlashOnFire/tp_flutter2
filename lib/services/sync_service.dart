@@ -27,7 +27,6 @@ class SyncService {
       whereArgs: [lastSyncKey],
       limit: 1,
     );
-
     if (result.isEmpty) return null;
     return DateTime.parse(result.first['value'] as String);
   }
@@ -42,7 +41,6 @@ class SyncService {
 
   Future<void> authenticate() async {
     try {
-      print('[SYNC] Authenticating to get JWT token...');
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login'),
         headers: {'Content-Type': 'application/json'},
@@ -55,19 +53,15 @@ class SyncService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         _jwtToken = data['token'];
-        print('[SYNC] SUCCESS: JWT token obtained');
-      } else {
-        print('[SYNC] WARNING: Authentication failed with status: ${response.statusCode}');
       }
     } catch (e) {
-      print('[SYNC] ERROR: Authentication error: $e');
+      print('[SYNC] Authentication error: $e');
     }
   }
 
   void startAutoSync() {
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      print('[SYNC] Auto-sync triggered');
       syncAll(isAutoSync: true);
     });
   }
@@ -78,42 +72,23 @@ class SyncService {
 
   Future<SyncResult> syncAll({bool isAutoSync = false}) async {
     try {
-      final syncType = isAutoSync ? 'AUTO-SYNC' : 'MANUAL-SYNC';
-      print('[$syncType] Starting synchronization...');
-      print('[$syncType] Base URL: $baseUrl');
+      final testResponse = await http.get(
+        Uri.parse('$baseUrl/categories'),
+      ).timeout(const Duration(seconds: 5));
 
-      try {
-        print('[$syncType] Testing server connectivity...');
-        final testResponse = await http.get(
-          Uri.parse('$baseUrl/categories'),
-        ).timeout(const Duration(seconds: 5));
-        print('[$syncType] Server responded with status: ${testResponse.statusCode}');
-      } catch (e) {
-        print('[$syncType] ERROR: Server connectivity test FAILED: $e');
-        print('[$syncType] ERROR: Make sure API server is running at $baseUrl');
-        final result = SyncResult(success: false, error: 'Server not reachable: $e');
+      if (testResponse.statusCode != 200) {
+        final result = SyncResult(success: false, error: 'Server not reachable');
         onSyncComplete?.call(result, isAutoSync);
         return result;
       }
 
       final lastSync = await getLastSyncTime();
-      print('[$syncType] Last sync time: ${lastSync?.toIso8601String() ?? "Never"}');
 
-      print('[$syncType] Syncing categories...');
       final categoriesResult = await syncCategories(lastSync);
-      print('[$syncType] SUCCESS: Categories: ${categoriesResult.uploaded} uploaded, ${categoriesResult.downloaded} downloaded');
-
-      print('[$syncType] Syncing auteurs...');
       final auteursResult = await syncAuteurs(lastSync);
-      print('[$syncType] SUCCESS: Auteurs: ${auteursResult.uploaded} uploaded, ${auteursResult.downloaded} downloaded');
-
-      print('[$syncType] Syncing livres...');
       final livresResult = await syncLivres(lastSync);
-      print('[$syncType] SUCCESS: Livres: ${livresResult.uploaded} uploaded, ${livresResult.downloaded} downloaded');
 
       await saveLastSyncTime(DateTime.now());
-
-      print('[$syncType] SUCCESS: Synchronization completed successfully!');
 
       final result = SyncResult(
         success: true,
@@ -127,14 +102,15 @@ class SyncService {
 
       onSyncComplete?.call(result, isAutoSync);
       return result;
-    } catch (e, stackTrace) {
-      final syncType = isAutoSync ? 'AUTO-SYNC' : 'MANUAL-SYNC';
-      print('[$syncType] ERROR: Fatal error during sync: $e');
-      print('[$syncType] ERROR: Stack trace: $stackTrace');
+    } catch (e) {
       final result = SyncResult(success: false, error: e.toString());
       onSyncComplete?.call(result, isAutoSync);
       return result;
     }
+  }
+
+  DateTime _parseTimestamp(String timestamp) {
+    return DateTime.parse(timestamp.replaceAll(' ', 'T'));
   }
 
   Future<EntitySyncResult> syncCategories(DateTime? lastSync) async {
@@ -143,7 +119,6 @@ class SyncService {
     Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes first (categories updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -152,17 +127,11 @@ class SyncService {
         where: whereClause,
         whereArgs: whereArgs,
       );
-      print('[SYNC-CAT] Found ${localCategories.length} local categories to upload');
 
       for (var cat in localCategories) {
-        if (_jwtToken == null) {
-          print('[SYNC-CAT] WARNING: JWT token required for category sync');
-          continue;
-        }
+        if (_jwtToken == null) continue;
 
-        print('[SYNC-CAT] Uploading/updating category: ${cat['libelle']} (ID: ${cat['id']}, is_deleted: ${cat['is_deleted']})');
         try {
-          // Try to update first (if it exists on server)
           final updateResponse = await http.put(
             Uri.parse('$baseUrl/categories/${cat['id']}'),
             headers: {
@@ -177,11 +146,9 @@ class SyncService {
           );
 
           if (updateResponse.statusCode == 200) {
-            print('[SYNC-CAT] SUCCESS: Category updated on server');
             uploaded++;
             uploadedIds.add(cat['id'] as int);
           } else {
-            // If update fails, try to create
             final createResponse = await http.post(
               Uri.parse('$baseUrl/categories'),
               headers: {
@@ -196,91 +163,62 @@ class SyncService {
             );
 
             if (createResponse.statusCode == 201) {
-              print('[SYNC-CAT] SUCCESS: Category created on server');
               uploaded++;
               uploadedIds.add(cat['id'] as int);
-            } else {
-              print('[SYNC-CAT] WARNING: Upload failed with status: ${createResponse.statusCode}');
             }
           }
         } catch (e) {
-          print('[SYNC-CAT] ERROR: Error uploading category: $e');
+          print('[SYNC-CAT] Error uploading category: $e');
         }
       }
 
-      // Download server changes (skip items we just uploaded)
-      try {
-        final response = await http.get(Uri.parse('$baseUrl/categories'));
-        print('[SYNC-CAT] Server response status: ${response.statusCode}');
+      final response = await http.get(Uri.parse('$baseUrl/categories'));
 
-        if (response.statusCode == 200) {
-          final List<dynamic> serverCategories = jsonDecode(response.body);
-          print('[SYNC-CAT] Received ${serverCategories.length} categories from server');
+      if (response.statusCode == 200) {
+        final List<dynamic> serverCategories = jsonDecode(response.body);
 
-          for (var serverCat in serverCategories) {
-            // Skip if we just uploaded this item
-            if (uploadedIds.contains(serverCat['id'] as int)) {
-              print('[SYNC-CAT] SKIP download: Category ${serverCat['libelle']} was just uploaded');
-              continue;
-            }
+        for (var serverCat in serverCategories) {
+          if (uploadedIds.contains(serverCat['id'] as int)) continue;
 
-            // Convert MySQL datetime format to ISO format for parsing
-            final updatedAtStr = (serverCat['updated_at'] as String).replaceAll(' ', 'T');
-            final serverUpdatedAt = DateTime.parse(updatedAtStr);
+          final serverUpdatedAt = _parseTimestamp(serverCat['updated_at'] as String);
 
-            final isNewerThanLastSync = lastSync == null || serverUpdatedAt.isAfter(lastSync);
-            print('[SYNC-CAT] Processing category: ${serverCat['libelle']}, serverUpdatedAt: $serverUpdatedAt, lastSync: $lastSync, isNewer: $isNewerThanLastSync');
+          if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
+            final existing = await database.query(
+              'categorie',
+              where: 'id = ?',
+              whereArgs: [serverCat['id']],
+            );
 
-            // Only process if newer than last sync
-            if (isNewerThanLastSync) {
-              final existing = await database.query(
-                'categorie',
-                where: 'id = ?',
-                whereArgs: [serverCat['id']],
-              );
-
-              if (existing.isEmpty) {
-                print('[SYNC-CAT] New category from server: ${serverCat['libelle']} (ID: ${serverCat['id']})');
-                await database.insert('categorie', {
-                  'id': serverCat['id'],
-                  'libelle': serverCat['libelle'],
-                  'is_deleted': serverCat['is_deleted'] ?? 0,
-                  'updated_at': serverCat['updated_at'],
-                });
-                downloaded++;
-              } else {
-                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
-                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
-
-                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
-                final serverUtc = serverUpdatedAt.toUtc();
-                final localUtc = localUpdatedAt.toUtc();
-
-                if (serverUtc.isAfter(localUtc)) {
-                  print('[SYNC-CAT] Updating category ${serverCat['libelle']} (server is newer, is_deleted: ${serverCat['is_deleted']})');
-                  await database.update(
-                    'categorie',
-                    {
-                      'libelle': serverCat['libelle'],
-                      'is_deleted': serverCat['is_deleted'] ?? 0,
-                      'updated_at': serverCat['updated_at'],
-                    },
-                    where: 'id = ?',
-                    whereArgs: [serverCat['id']],
-                  );
-                  downloaded++;
-                }
-              }
+            if (existing.isEmpty) {
+              await database.insert('categorie', {
+                'id': serverCat['id'],
+                'libelle': serverCat['libelle'],
+                'is_deleted': serverCat['is_deleted'] ?? 0,
+                'updated_at': serverCat['updated_at'],
+              });
+              downloaded++;
             } else {
-              print('[SYNC-CAT] SKIP: Category ${serverCat['libelle']} not newer than lastSync');
+              final localUpdatedAt = _parseTimestamp(existing.first['updated_at'] as String);
+
+              if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                await database.update(
+                  'categorie',
+                  {
+                    'libelle': serverCat['libelle'],
+                    'is_deleted': serverCat['is_deleted'] ?? 0,
+                    'updated_at': serverCat['updated_at'],
+                  },
+                  where: 'id = ?',
+                  whereArgs: [serverCat['id']],
+                );
+                downloaded++;
+              }
             }
           }
         }
-      } catch (e) {
-        print('[SYNC-CAT] ERROR: Error downloading categories: $e');
       }
     } catch (e) {
-      print('[SYNC-CAT] ERROR: Fatal error in syncCategories: $e');
+      print('[SYNC-CAT] Error: $e');
     }
 
     return EntitySyncResult(uploaded: uploaded, downloaded: downloaded);
@@ -292,7 +230,6 @@ class SyncService {
     Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes first (auteurs updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -301,17 +238,11 @@ class SyncService {
         where: whereClause,
         whereArgs: whereArgs,
       );
-      print('[SYNC-AUT] Found ${localAuteurs.length} local auteurs to upload');
 
       for (var auteur in localAuteurs) {
-        if (_jwtToken == null) {
-          print('[SYNC-AUT] WARNING: JWT token required for auteur sync');
-          continue;
-        }
+        if (_jwtToken == null) continue;
 
-        print('[SYNC-AUT] Uploading/updating auteur: ${auteur['nom']} ${auteur['prenoms']} (ID: ${auteur['id']}, is_deleted: ${auteur['is_deleted']})');
         try {
-          // Try to update first
           final updateResponse = await http.put(
             Uri.parse('$baseUrl/auteurs/${auteur['id']}'),
             headers: {
@@ -328,11 +259,9 @@ class SyncService {
           );
 
           if (updateResponse.statusCode == 200) {
-            print('[SYNC-AUT] SUCCESS: Auteur updated on server');
             uploaded++;
             uploadedIds.add(auteur['id'] as int);
           } else {
-            // If update fails, try to create
             final createResponse = await http.post(
               Uri.parse('$baseUrl/auteurs'),
               headers: {
@@ -349,89 +278,66 @@ class SyncService {
             );
 
             if (createResponse.statusCode == 201) {
-              print('[SYNC-AUT] SUCCESS: Auteur created on server');
               uploaded++;
               uploadedIds.add(auteur['id'] as int);
-            } else {
-              print('[SYNC-AUT] WARNING: Upload failed with status: ${createResponse.statusCode}');
             }
           }
         } catch (e) {
-          print('[SYNC-AUT] ERROR: Error uploading auteur: $e');
+          print('[SYNC-AUT] Error uploading auteur: $e');
         }
       }
 
-      // Download server changes (skip items we just uploaded)
-      try {
-        final response = await http.get(Uri.parse('$baseUrl/auteurs'));
+      final response = await http.get(Uri.parse('$baseUrl/auteurs'));
 
-        if (response.statusCode == 200) {
-          final List<dynamic> serverAuteurs = jsonDecode(response.body);
-          print('[SYNC-AUT] Received ${serverAuteurs.length} auteurs from server');
+      if (response.statusCode == 200) {
+        final List<dynamic> serverAuteurs = jsonDecode(response.body);
 
-          for (var serverAuteur in serverAuteurs) {
-            // Skip if we just uploaded this item
-            if (uploadedIds.contains(serverAuteur['id'] as int)) {
-              print('[SYNC-AUT] SKIP download: Auteur ${serverAuteur['nom']} was just uploaded');
-              continue;
-            }
+        for (var serverAuteur in serverAuteurs) {
+          if (uploadedIds.contains(serverAuteur['id'] as int)) continue;
 
-            // Convert MySQL datetime format to ISO format for parsing
-            final updatedAtStr = (serverAuteur['updated_at'] as String).replaceAll(' ', 'T');
-            final serverUpdatedAt = DateTime.parse(updatedAtStr);
+          final serverUpdatedAt = _parseTimestamp(serverAuteur['updated_at'] as String);
 
-            // Only process if newer than last sync
-            if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
-              final existing = await database.query(
-                'auteur',
-                where: 'id = ?',
-                whereArgs: [serverAuteur['id']],
-              );
+          if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
+            final existing = await database.query(
+              'auteur',
+              where: 'id = ?',
+              whereArgs: [serverAuteur['id']],
+            );
 
-              if (existing.isEmpty) {
-                print('[SYNC-AUT] New auteur from server: ${serverAuteur['nom']} (ID: ${serverAuteur['id']})');
-                await database.insert('auteur', {
-                  'id': serverAuteur['id'],
-                  'nom': serverAuteur['nom'],
-                  'prenoms': serverAuteur['prenom'],
-                  'email': serverAuteur['mail'],
-                  'is_deleted': serverAuteur['is_deleted'] ?? 0,
-                  'updated_at': serverAuteur['updated_at'],
-                });
+            if (existing.isEmpty) {
+              await database.insert('auteur', {
+                'id': serverAuteur['id'],
+                'nom': serverAuteur['nom'],
+                'prenoms': serverAuteur['prenom'],
+                'email': serverAuteur['mail'],
+                'is_deleted': serverAuteur['is_deleted'] ?? 0,
+                'updated_at': serverAuteur['updated_at'],
+              });
+              downloaded++;
+            } else {
+              final localUpdatedAt = _parseTimestamp(existing.first['updated_at'] as String);
+
+              if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                await database.update(
+                  'auteur',
+                  {
+                    'nom': serverAuteur['nom'],
+                    'prenoms': serverAuteur['prenom'],
+                    'email': serverAuteur['mail'],
+                    'is_deleted': serverAuteur['is_deleted'] ?? 0,
+                    'updated_at': serverAuteur['updated_at'],
+                  },
+                  where: 'id = ?',
+                  whereArgs: [serverAuteur['id']],
+                );
                 downloaded++;
-              } else {
-                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
-                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
-
-                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
-                final serverUtc = serverUpdatedAt.toUtc();
-                final localUtc = localUpdatedAt.toUtc();
-
-                if (serverUtc.isAfter(localUtc)) {
-                  print('[SYNC-AUT] Updating auteur ${serverAuteur['nom']} (server is newer, is_deleted: ${serverAuteur['is_deleted']})');
-                  await database.update(
-                    'auteur',
-                    {
-                      'nom': serverAuteur['nom'],
-                      'prenoms': serverAuteur['prenom'],
-                      'email': serverAuteur['mail'],
-                      'is_deleted': serverAuteur['is_deleted'] ?? 0,
-                      'updated_at': serverAuteur['updated_at'],
-                    },
-                    where: 'id = ?',
-                    whereArgs: [serverAuteur['id']],
-                  );
-                  downloaded++;
-                }
               }
             }
           }
         }
-      } catch (e) {
-        print('[SYNC-AUT] ERROR: Error downloading auteurs: $e');
       }
     } catch (e) {
-      print('[SYNC-AUT] ERROR: Fatal error in syncAuteurs: $e');
+      print('[SYNC-AUT] Error: $e');
     }
 
     return EntitySyncResult(uploaded: uploaded, downloaded: downloaded);
@@ -443,7 +349,6 @@ class SyncService {
     Set<int> uploadedIds = {};
 
     try {
-      // Upload local changes first (livres updated since last sync)
       String whereClause = lastSync != null ? 'updated_at > ?' : '1=1';
       List<dynamic> whereArgs = lastSync != null ? [lastSync.toIso8601String()] : [];
 
@@ -452,17 +357,11 @@ class SyncService {
         where: whereClause,
         whereArgs: whereArgs,
       );
-      print('[SYNC-LIV] Found ${localLivres.length} local livres to upload');
 
       for (var livre in localLivres) {
-        if (_jwtToken == null) {
-          print('[SYNC-LIV] WARNING: JWT token required for livre sync');
-          continue;
-        }
+        if (_jwtToken == null) continue;
 
-        print('[SYNC-LIV] Uploading/updating livre: ${livre['libelle']} (ID: ${livre['id']}, is_deleted: ${livre['is_deleted']})');
         try {
-          // Try to update first
           final updateResponse = await http.put(
             Uri.parse('$baseUrl/livres/${livre['id']}'),
             headers: {
@@ -480,11 +379,9 @@ class SyncService {
           );
 
           if (updateResponse.statusCode == 200) {
-            print('[SYNC-LIV] SUCCESS: Livre updated on server');
             uploaded++;
             uploadedIds.add(livre['id'] as int);
           } else {
-            // If update fails, try to create
             final createResponse = await http.post(
               Uri.parse('$baseUrl/livres'),
               headers: {
@@ -502,92 +399,68 @@ class SyncService {
             );
 
             if (createResponse.statusCode == 201) {
-              print('[SYNC-LIV] SUCCESS: Livre created on server');
               uploaded++;
               uploadedIds.add(livre['id'] as int);
-            } else {
-              print('[SYNC-LIV] WARNING: Upload failed with status: ${createResponse.statusCode}, body: ${createResponse.body}');
             }
           }
         } catch (e) {
-          print('[SYNC-LIV] ERROR: Error uploading livre: $e');
+          print('[SYNC-LIV] Error uploading livre: $e');
         }
       }
 
-      // Download server changes (skip items we just uploaded)
-      try {
-        final response = await http.get(Uri.parse('$baseUrl/livres'));
+      final response = await http.get(Uri.parse('$baseUrl/livres'));
 
-        if (response.statusCode == 200) {
-          final List<dynamic> serverLivres = jsonDecode(response.body);
-          print('[SYNC-LIV] Received ${serverLivres.length} livres from server');
+      if (response.statusCode == 200) {
+        final List<dynamic> serverLivres = jsonDecode(response.body);
 
-          for (var serverLivre in serverLivres) {
-            // Skip if we just uploaded this item
-            if (uploadedIds.contains(serverLivre['id'] as int)) {
-              print('[SYNC-LIV] SKIP download: Livre ${serverLivre['libelle']} was just uploaded');
-              continue;
-            }
+        for (var serverLivre in serverLivres) {
+          if (uploadedIds.contains(serverLivre['id'] as int)) continue;
 
-            // Convert MySQL datetime format to ISO format for parsing
-            final updatedAtStr = (serverLivre['updated_at'] as String).replaceAll(' ', 'T');
-            final serverUpdatedAt = DateTime.parse(updatedAtStr);
+          final serverUpdatedAt = _parseTimestamp(serverLivre['updated_at'] as String);
 
-            // Only process if newer than last sync
-            if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
-              final existing = await database.query(
-                'livre',
-                where: 'id = ?',
-                whereArgs: [serverLivre['id']],
-              );
+          if (lastSync == null || serverUpdatedAt.isAfter(lastSync)) {
+            final existing = await database.query(
+              'livre',
+              where: 'id = ?',
+              whereArgs: [serverLivre['id']],
+            );
 
-              if (existing.isEmpty) {
-                print('[SYNC-LIV] New livre from server: ${serverLivre['libelle']} (ID: ${serverLivre['id']})');
-                await database.insert('livre', {
-                  'id': serverLivre['id'],
-                  'libelle': serverLivre['libelle'],
-                  'description': serverLivre['description'],
-                  'auteur_id': serverLivre['auteur_id'],
-                  'categorie_id': serverLivre['categorie_id'],
-                  'is_deleted': serverLivre['is_deleted'] ?? 0,
-                  'updated_at': serverLivre['updated_at'],
-                });
+            if (existing.isEmpty) {
+              await database.insert('livre', {
+                'id': serverLivre['id'],
+                'libelle': serverLivre['libelle'],
+                'description': serverLivre['description'],
+                'auteur_id': serverLivre['auteur_id'],
+                'categorie_id': serverLivre['categorie_id'],
+                'is_deleted': serverLivre['is_deleted'] ?? 0,
+                'updated_at': serverLivre['updated_at'],
+              });
+              downloaded++;
+            } else {
+              final localUpdatedAt = _parseTimestamp(existing.first['updated_at'] as String);
+
+              if (serverUpdatedAt.isAfter(localUpdatedAt)) {
+                await database.update(
+                  'livre',
+                  {
+                    'libelle': serverLivre['libelle'],
+                    'description': serverLivre['description'],
+                    'auteur_id': serverLivre['auteur_id'],
+                    'categorie_id': serverLivre['categorie_id'],
+                    'is_deleted': serverLivre['is_deleted'] ?? 0,
+                    'updated_at': serverLivre['updated_at'],
+                  },
+                  where: 'id = ?',
+                  whereArgs: [serverLivre['id']],
+                );
                 downloaded++;
-              } else {
-                final localUpdatedAtStr = (existing.first['updated_at'] as String).replaceAll(' ', 'T');
-                final localUpdatedAt = DateTime.parse(localUpdatedAtStr);
-
-                // Normalize both to UTC for comparison (server returns Z suffix, local doesn't)
-                final serverUtc = serverUpdatedAt.toUtc();
-                final localUtc = localUpdatedAt.toUtc();
-
-                if (serverUtc.isAfter(localUtc)) {
-                  print('[SYNC-LIV] Updating livre ${serverLivre['libelle']} (server is newer, is_deleted: ${serverLivre['is_deleted']})');
-                  print('[SYNC-LIV] DEBUG: serverUpdatedAt=$serverUpdatedAt, localUpdatedAt=$localUpdatedAt');
-                  await database.update(
-                    'livre',
-                    {
-                      'libelle': serverLivre['libelle'],
-                      'description': serverLivre['description'],
-                      'auteur_id': serverLivre['auteur_id'],
-                      'categorie_id': serverLivre['categorie_id'],
-                      'is_deleted': serverLivre['is_deleted'] ?? 0,
-                      'updated_at': serverLivre['updated_at'],
-                    },
-                    where: 'id = ?',
-                    whereArgs: [serverLivre['id']],
-                  );
-                  downloaded++;
-                }
               }
             }
           }
         }
-      } catch (e) {
-        print('[SYNC-LIV] ERROR: Error downloading livres: $e');
       }
     } catch (e) {
-      print('[SYNC-LIV] ERROR: Fatal error in syncLivres: $e');
+      print('[SYNC-LIV] Error: $e');
     }
 
     return EntitySyncResult(uploaded: uploaded, downloaded: downloaded);
