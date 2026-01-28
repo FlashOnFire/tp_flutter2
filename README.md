@@ -23,11 +23,6 @@ curl http://localhost:3000/api/categories
 
 ### 2. Lancer l'application Flutter
 
-Supprimer l'ancienne base de données locale (si elle existe) :
-```bash
-rm -rf .dart_tool/sqflite_common_ffi/databases/
-```
-
 Installer les dépendances :
 ```bash
 flutter pub get
@@ -38,62 +33,30 @@ Lancer l'application :
 flutter run -d linux
 ```
 
-Ou avec FVM :
-```bash
-fvm flutter pub get
-fvm flutter run -d linux
-```
-
 ## Fonctionnalités
 
 ### Synchronisation automatique
 
 L'application synchronise automatiquement les données entre la base locale SQLite et le serveur distant toutes les 30 secondes.
 
-La synchronisation est bidirectionnelle (upload et download)
- Résolution de conflits basée sur les timestamps
-- Fonctionnement hors ligne complet
-
-### Gestion des données
-
-- Catégories : consultation et gestion des catégories de livres
-- Auteurs : consultation et gestion des auteurs
-- Livres : consultation et gestion des livres (nécessite authentification JWT pour modification)
+- La synchronisation est bidirectionnelle (upload et download)
+- Résolution de conflits basée sur les timestamps `updated_at`
+- La suppression est gérée via un field `is_deleted` (détaillé plus bas)
 
 ### Authentification
 
+Authentification via JWT pour sécuriser les endpoints de modification des données.
 Identifiants par défaut :
 - Email : `admin@mail.com`
 - Mot de passe : `admin123`
 
-## Ports utilisés
+## Swagger
 
-- API REST : `http://localhost:3000`
-- Documentation Swagger : `http://localhost:3000/api-docs`
-- MySQL : `localhost:3307`
-
-## Architecture
-
-### Backend (api-server/)
-
-- Node.js + Express
-- MySQL 8.0
-- JWT pour l'authentification
-- Swagger pour la documentation API
-- Docker pour le déploiement
-
-### Frontend (Flutter)
-
-- SQLite local pour le stockage hors ligne
-- Service de synchronisation automatique
-- Interface utilisateur responsive
-- Gestion d'état avec StatefulWidget
+La documentation Swagger est accessible à l'adresse `http://localhost:3000/api-docs`
 
 ## Base de données
 
 ### Tables
-
-Toutes les tables incluent des champs `updated_at` et `is_deleted` pour la synchronisation :
 
 - `auteur` : id, nom, prenom, mail, is_deleted, updated_at
 - `categorie` : id, libelle, is_deleted, updated_at
@@ -108,31 +71,11 @@ Les suppressions utilisent un mécanisme de "soft-delete" :
 - Les listes n'affichent que les éléments avec `is_deleted = 0`
 - Les conflits sont résolus en comparant les timestamps : la modification la plus récente gagne
 
-## Endpoints API
+### Sync-Metadata
+La table `sync_metadata` stocke des informations de synchronisation.
+Actuellement, elle contient uniquement un champ 'last_sync' indiquant la date et l'heure de la dernière synchronisation réussie.
+Ce champ est mis à jour après chaque synchronisation complète et est utilisé pour déterminer les modifications à synchroniser.
 
-### Public
-
-- `GET /api/categories` - Liste des catégories
-- `GET /api/auteurs` - Liste des auteurs
-- `GET /api/livres` - Liste des livres (avec JOINs)
-
-### Protégés (JWT requis)
-
-- `POST /api/livres` - Créer un livre
-- `PUT /api/livres/:id` - Modifier un livre
-- `DELETE /api/livres/:id` - Supprimer un livre
-
-### Authentification
-
-- `POST /api/auth/login` - Obtenir un token JWT
-
-### Principe
-
-1. Les objets créés localement reçoivent un ID négatif temporaire
-2. Lors de la synchronisation, ils sont envoyés au serveur
-3. Le serveur assigne un ID permanent
-4. L'ID local est mis à jour avec l'ID du serveur
-5. Les données du serveur sont téléchargées et fusionnées
 
 ### Résolution de conflits
 
@@ -165,8 +108,6 @@ docker compose up -d --build
 ```bash
 rm -rf .dart_tool/sqflite_common_ffi/databases/
 ```
-
-Puis relancer l'application Flutter.
 
 ## Logs
 
