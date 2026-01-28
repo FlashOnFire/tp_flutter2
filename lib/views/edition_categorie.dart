@@ -5,7 +5,7 @@ import 'package:tp_flutter2/models/database/dao.dart';
 class EditionCategorie extends StatefulWidget {
   final Categorie? categorie;
 
-  const EditionCategorie({Key? key, this.categorie}) : super(key: key);
+  const EditionCategorie({super.key, this.categorie});
 
   @override
   State<EditionCategorie> createState() => _EditionCategorieState();

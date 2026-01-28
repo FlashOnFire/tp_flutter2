@@ -7,7 +7,7 @@ import 'package:tp_flutter2/models/database/dao.dart';
 class EditionLivre extends StatefulWidget {
   final Livre? livre;
 
-  const EditionLivre({Key? key, this.livre}) : super(key: key);
+  const EditionLivre({super.key, this.livre});
 
   @override
   State<EditionLivre> createState() => _EditionLivreState();

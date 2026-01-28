@@ -5,7 +5,7 @@ import 'package:tp_flutter2/models/database/dao.dart';
 class EditionAuteur extends StatefulWidget {
   final Auteur? auteur;
 
-  const EditionAuteur({Key? key, this.auteur}) : super(key: key);
+  const EditionAuteur({super.key, this.auteur});
 
   @override
   State<EditionAuteur> createState() => _EditionAuteurState();

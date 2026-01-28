@@ -4,7 +4,7 @@ import 'package:tp_flutter2/models/database/dao.dart';
 import 'package:tp_flutter2/views/edition_categorie.dart';
 
 class ListeCategorie extends StatefulWidget {
-  const ListeCategorie({Key? key}) : super(key: key);
+  const ListeCategorie({super.key});
 
   @override
   State<ListeCategorie> createState() => _ListeCategorieState();

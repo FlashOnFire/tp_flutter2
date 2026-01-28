@@ -4,7 +4,7 @@ import 'package:tp_flutter2/models/database/dao.dart';
 import 'package:tp_flutter2/views/edition_livre.dart';
 
 class ListeLivrePage extends StatefulWidget {
-  const ListeLivrePage({Key? key}) : super(key: key);
+  const ListeLivrePage({super.key});
 
   @override
   State<ListeLivrePage> createState() => _ListeLivrePageState();
