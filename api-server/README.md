@@ -4,8 +4,6 @@ API REST pour gérer une bibliothèque (livres, auteurs, catégories) avec docum
 
 ## Démarrage rapide
 
-### Avec Docker (Recommandé)
-
 ```bash
 # Démarrer les conteneurs
 docker-compose up -d
@@ -18,19 +16,6 @@ docker-compose down
 
 # Reconstruire et redémarrer
 docker-compose down && docker-compose up -d --build
-```
-
-### Sans Docker
-
-```bash
-# Installer les dépendances
-npm install
-
-# Créer un fichier .env avec vos paramètres MySQL
-cp .env.example .env
-
-# Démarrer le serveur
-npm start
 ```
 
 ## Documentation Swagger
@@ -119,35 +104,3 @@ Le projet utilise deux conteneurs :
 
 La base de données est initialisée automatiquement avec le schéma défini dans `init.sql`.
 
-## Dépendances principales
-
-- **express** - Framework web
-- **mysql2** - Client MySQL
-- **cors** - Gestion CORS
-- **swagger-ui-express** - Interface Swagger UI
-- **swagger-jsdoc** - Génération de specs OpenAPI depuis JSDoc
-- **dotenv** - Gestion des variables d'environnement
-
-## Développement
-
-Pour modifier la documentation Swagger, éditez les commentaires JSDoc dans `server.js` ou la configuration dans `swagger.js`.
-
-Exemple de commentaire JSDoc :
-```javascript
-/**
- * @swagger
- * /api/exemple:
- *   get:
- *     summary: Description de l'endpoint
- *     tags: [Tag]
- *     responses:
- *       200:
- *         description: Réponse réussie
- */
-```
-
-## Notes
-
-- Le serveur attend que MySQL soit prêt avant de démarrer (5 tentatives max)
-- CORS est activé pour tous les domaines
-- Les données initiales sont chargées depuis `init.sql`
