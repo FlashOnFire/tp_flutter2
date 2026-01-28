@@ -43,7 +43,7 @@ L'application synchronise automatiquement les données entre la base locale SQLi
 
 - La synchronisation est bidirectionnelle (upload et download)
 - Résolution de conflits basée sur les timestamps `updated_at`
-- La suppression est gérée via un field `is_deleted` (détaillé plus bas)
+- La suppression est gérée via un champ `is_deleted` (détaillé plus bas)
 
 ### Authentification
 
@@ -75,7 +75,7 @@ Les suppressions utilisent un mécanisme de "soft-delete" :
 
 ### Sync-Metadata
 La table `sync_metadata` stocke des informations de synchronisation.
-Actuellement, elle contient uniquement un champ 'last_sync' indiquant la date et l'heure de la dernière synchronisation réussie.
+Elle contient uniquement un champ 'last_sync' indiquant la date et l'heure de la dernière synchronisation réussie.
 Ce champ est mis à jour après chaque synchronisation complète et est utilisé pour déterminer les modifications à synchroniser.
 
 
