@@ -44,7 +44,6 @@ exports.create = (req, res) => {
 
 exports.update = (req, res) => {
   const { nom, prenom, mail, updated_at, is_deleted } = req.body;
-  // Preserve client timestamp exactly - just format for MySQL
   const timestamp = updated_at
     ? updated_at.replace('T', ' ').substring(0, 19)
     : new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -53,8 +52,11 @@ exports.update = (req, res) => {
   db.query(
     "UPDATE auteur SET nom=?, prenom=?, mail=?, is_deleted=?, updated_at=? WHERE id=?",
     [nom, prenom, mail, deleted, timestamp, req.params.id],
-    (err) => {
+    (err, result) => {
       if (err) return res.status(500).json(err);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Auteur non trouvé" });
+      }
       res.json({ message: "Auteur mis à jour", is_deleted: deleted, updated_at: timestamp });
     }
   );

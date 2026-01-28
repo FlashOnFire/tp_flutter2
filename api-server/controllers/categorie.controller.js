@@ -42,7 +42,6 @@ exports.create = (req, res) => {
 
 exports.update = (req, res) => {
   const { libelle, updated_at, is_deleted } = req.body;
-  // Preserve client timestamp exactly - just format for MySQL (replace T with space, truncate to seconds)
   const timestamp = updated_at
     ? updated_at.replace('T', ' ').substring(0, 19)
     : new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -51,8 +50,11 @@ exports.update = (req, res) => {
   db.query(
     "UPDATE categorie SET libelle=?, is_deleted=?, updated_at=? WHERE id=?",
     [libelle, deleted, timestamp, req.params.id],
-    (err) => {
+    (err, result) => {
       if (err) return res.status(500).json(err);
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Catégorie non trouvée" });
+      }
       res.json({ message: "Catégorie mise à jour", is_deleted: deleted, updated_at: timestamp });
     }
   );

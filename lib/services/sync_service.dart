@@ -165,6 +165,8 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               uploaded++;
               uploadedIds.add(cat['id'] as int);
+            } else {
+              print('[SYNC-CAT] Error creating category: ${createResponse.statusCode} - ${createResponse.body}');
             }
           }
         } catch (e) {
@@ -280,6 +282,8 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               uploaded++;
               uploadedIds.add(auteur['id'] as int);
+            } else {
+              print('[SYNC-AUT] Error creating auteur: ${createResponse.statusCode} - ${createResponse.body}');
             }
           }
         } catch (e) {
@@ -401,6 +405,8 @@ class SyncService {
             if (createResponse.statusCode == 201) {
               uploaded++;
               uploadedIds.add(livre['id'] as int);
+            } else {
+              print('[SYNC-LIV] Error creating livre: ${createResponse.statusCode} - ${createResponse.body}');
             }
           }
         } catch (e) {
